@@ -5,13 +5,14 @@ body {
 
 .card {
   border: none;
-  border-radius: 10px;
+  border-radius: 15px;
   overflow: hidden;
-  transition: transform 0.3s;
+  transition: transform 0.3s, box-shadow 0.3s;
 }
 
 .card:hover {
-  transform: scale(1.05);
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
 .card-img-top {
@@ -22,4 +23,45 @@ body {
 h1 {
   font-weight: 700;
   color: #343a40;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.card-body {
+  background-color: #fff;
+  padding: 1.5rem;
+}
+
+.btn-danger {
+  transition: background-color 0.3s;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+}
+
+.form-select, .form-control {
+  border-radius: 8px;
+}
+
+#mediaContainer {
+  transition: opacity 0.3s;
+}
+
+#mediaContainer:empty::before {
+  content: 'No hay medios que coincidan con los filtros';
+  display: block;
+  text-align: center;
+  color: #6c757d;
+  font-size: 1.2rem;
+  margin-top: 2rem;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate__animated.animate__fadeIn {
+  animation: fadeIn 0.5s ease-in;
 }
