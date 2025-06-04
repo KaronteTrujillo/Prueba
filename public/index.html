@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,44 +10,185 @@
 <body>
   <div class="container mt-4">
     <h1 class="text-center mb-4">WhatsApp Media Viewer</h1>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">Filtros</h5>
+        <form id="filterForm" class="row g-3">
+          <div class="col-md-3">
+            <select class="form-select" id="typeFilter">
+              <option value="">Todos los tipos</option>
+              <option value="image">Imagen</option>
+              <option value="video">Video</option>
+              <option value="audio">Audio</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <input type="text" class="form-control" id="senderFilter" placeholder="Remitente">
+          </div>
+          <div class="col-md-3">
+            <input type="date" class="form-control" id="dateFilter">
+          </div>
+          <div class="col-md-3">
+            <select class="form-select" id="albumFilter">
+              <option value="">Todos los álbumes</option>
+            </select>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Crear álbum -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">Crear Álbum</h5>
+        <form id="albumForm" class="row g-3">
+          <div class="col-md-9">
+            <input type="text" class="form-control" id="albumName" placeholder="Nombre del álbum">
+          </div>
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">Crear</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Contenedor de medios -->
     <div id="mediaContainer" class="row"></div>
   </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const socket = io();
     const mediaContainer = document.getElementById('mediaContainer');
+    const typeFilter = document.getElementById('typeFilter');
+    const senderFilter = document.getElementById('senderFilter');
+    const dateFilter = document.getElementById('dateFilter');
+    const albumFilter = document.getElementById('albumFilter');
+    const filterForm = document.getElementById('filterForm');
+    const albumForm = document.getElementById('albumForm');
 
-    // Fetch initial media
-    fetch('/media')
-      .then(res => res.json())
-      .then(mediaList => {
-        mediaList.forEach(media => renderMedia(media));
-      });
+    let mediaList = [];
+    let albums = {};
 
-    // Listen for new media
+    fetch('/media').then(res => res.json()).then(data => {
+      mediaList = data;
+      renderMedia(mediaList);
+    });
+    fetch('/albums').then(res => res.json()).then(data => {
+      albums = data;
+      updateAlbumFilter();
+    });
+
     socket.on('newMedia', (media) => {
-      renderMedia(media);
+      mediaList.push(media);
+      renderMedia(mediaList);
+    });
+
+    socket.on('mediaDeleted', (id) => {
+      mediaList = mediaList.filter(m => m.id !== id);
+      renderMedia(mediaList);
+    });
+
+    socket.on('mediaUpdated', (updatedMedia) => {
+      mediaList = mediaList.map(m => m.id === updatedMedia.id ? updatedMedia : m);
+      renderMedia(mediaList);
+    });
+
+    socket.on('albumsUpdated', (newAlbums) => {
+      albums = newAlbums;
+      updateAlbumFilter();
     });
 
     function renderMedia(media) {
-      const card = document.createElement('div');
-      card.className = 'col-md-4 mb-4';
-      card.innerHTML = `
-        <div class="card shadow-sm">
-          ${
-            media.type === 'image' ? `<img src="${media.url}" class="card-img-top" alt="Media">` :
-            media.type === 'video' ? `<video src="${media.url}" class="card-img-top" controls></video>` :
-            `<audio src="${media.url}" class="card-img-top" controls></audio>`
-          }
-          <div class="card-body">
-            <p class="card-text"><strong>Sender:</strong> ${media.sender}</p>
-            <p class="card-text"><strong>Time:</strong> ${new Date(media.timestamp).toLocaleString()}</p>
+      mediaContainer.innerHTML = '';
+      const filteredMedia = filterMedia(media);
+      filteredMedia.forEach(media => {
+        const card = document.createElement('div');
+        card.className = 'col-md-4 mb-4';
+        card.innerHTML = `
+          <div class="card shadow-sm animate__animated animate__fadeIn">
+            ${
+              media.type === 'image' ? `<img src="${media.url}" class="card-img-top" alt="Media">` :
+              media.type === 'video' ? `<video src="${media.url}" class="card-img-top" controls></video>` :
+              `<audio src="${media.url}" class="card-img-top" controls></audio>`
+            }
+            <div class="card-body">
+              <p class="card-text"><strong>Remitente:</strong> ${media.sender}</p>
+              <p class="card-text"><strong>Fecha:</strong> ${new Date(media.timestamp).toLocaleString()}</p>
+              <p class="card-text"><strong>Ver una vez:</strong> ${media.isViewOnce ? 'Sí' : 'No'}</p>
+              <p class="card-text"><strong>Álbum:</strong> ${media.album || 'Ninguno'}</p>
+              <select class="form-select mb-2" onchange="assignAlbum('${media.id}', this.value)">
+                <option value="">Ninguno</option>
+                ${Object.keys(albums).map(name => `<option value="${name}" ${media.album === name ? 'selected' : ''}>${name}</option>`).join('')}
+              </select>
+              <button class="btn btn-danger w-100" onclick="deleteMedia('${media.id}')">Eliminar</button>
+            </div>
           </div>
-        </div>
-      `;
-      mediaContainer.prepend(card); 
+        `;
+        mediaContainer.appendChild(card);
+      });
     }
+
+    function filterMedia(media) {
+      return media.filter(m => {
+        const typeMatch = !typeFilter.value || m.type === typeFilter.value;
+        const senderMatch = !senderFilter.value || m.sender.includes(senderFilter.value);
+        const dateMatch = !dateFilter.value || new Date(m.timestamp).toDateString() === new Date(dateFilter.value).toDateString();
+        const albumMatch = !albumFilter.value || m.album === albumFilter.value || (albumFilter.value === 'none' && !m.album);
+        return typeMatch && senderMatch && dateMatch && albumMatch;
+      });
+    }
+
+    function updateAlbumFilter() {
+      albumFilter.innerHTML = `<option value="">Todos los álbumes</option><option value="none">Sin álbum</option>`;
+      Object.keys(albums).forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        albumFilter.appendChild(option);
+      });
+    }
+
+    function deleteMedia(id) {
+      fetch(`/media/${id}`, { method: 'DELETE' })
+        .then(res => res.json())
+        .then(data => {
+          if (!data.success) alert('Error al eliminar el archivo');
+        });
+    }
+
+    function assignAlbum(id, album) {
+      fetch(`/media/${id}/album`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ album: album || null })
+      }).then(res => res.json()).then(data => {
+        if (!data.success) alert('Error al asignar el álbum');
+      });
+    }
+
+    albumForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('albumName').value;
+      if (name) {
+        fetch('/album', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        }).then(res => res.json()).then(data => {
+          if (data.success) {
+            document.getElementById('albumName').value = '';
+          } else {
+            alert('Error al crear el álbum');
+          }
+        });
+      }
+    });
+
+    filterForm.addEventListener('input', () => renderMedia(mediaList));
   </script>
 </body>
 </html>
