@@ -1,12 +1,10 @@
-
-const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 const readline = require('readline');
 
 const app = express();
@@ -38,7 +36,7 @@ async function connectToWhatsApp() {
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
-      console.log('Scan this QR code with your WhatsApp:');
+      console.log('Escanea este código QR con tu WhatsApp:');
       qrcode.generate(qr, { small: true });
     }
     if (connection === 'close') {
@@ -47,7 +45,7 @@ async function connectToWhatsApp() {
         connectToWhatsApp();
       }
     } else if (connection === 'open') {
-      console.log('Connected to WhatsApp!');
+      console.log('¡Conectado a WhatsApp!');
     }
   });
 
@@ -55,7 +53,8 @@ async function connectToWhatsApp() {
 
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
-    if (!msg.message) return;
+    if (!msg.message || msg.key.remoteJid === 'status@broadcast') return; // Ignorar estados
+    if (msg.messageStubType) return; // Ignorar notificaciones de historial
 
     let mediaUrl = null;
     let mediaType = null;
@@ -73,25 +72,36 @@ async function connectToWhatsApp() {
     }
 
     if (mediaType) {
-      const mediaData = await sock.downloadMediaMessage(msg);
-      const filePath = path.join(mediaDir, fileName);
-      fs.writeFileSync(filePath, mediaData);
+      try {
+        const buffer = await downloadMediaMessage(
+          msg,
+          'buffer',
+          {},
+          { logger: console, reuploadRequest: sock.updateMediaMessage }
+        );
 
-      mediaUrl = `/media/${fileName}`;
-      mediaList.push({ type: mediaType, url: mediaUrl, sender: msg.key.remoteJid, timestamp: new Date() });
+        const filePath = path.join(mediaDir, fileName);
+        fs.writeFileSync(filePath, buffer);
 
-      io.emit('newMedia', { type: mediaType, url: mediaUrl, sender: msg.key.remoteJid, timestamp: new Date() });
-      console.log(`Received ${mediaType} from ${msg.key.remoteJid}, saved as ${fileName}`);
+        mediaUrl = `/media/${fileName}`;
+        mediaList.push({ type: mediaType, url: mediaUrl, sender: msg.key.remoteJid, timestamp: new Date() });
+
+        // Emitir el nuevo archivo multimedia a la interfaz web
+        io.emit('newMedia', { type: mediaType, url: mediaUrl, sender: msg.key.remoteJid, timestamp: new Date() });
+        console.log(`Recibido ${mediaType} de ${msg.key.remoteJid}, guardado como ${fileName}`);
+      } catch (error) {
+        console.error(`Error al descargar multimedia: ${error.message}`);
+      }
     }
   });
 
-  rl.question('Enter your WhatsApp phone number (e.g., +1234567890): ', (phoneNumber) => {
-    console.log(`Connecting with phone number: ${phoneNumber}`);
+  rl.question('Ingresa tu número de WhatsApp (ejemplo, +1234567890): ', (phoneNumber) => {
+    console.log(`Conectando con el número: ${phoneNumber}`);
   });
 }
 
 server.listen(3000, () => {
-  console.log('Server running at http://localhost:3000');
+  console.log('Servidor corriendo en http://localhost:3000');
   connectToWhatsApp();
 });
 
