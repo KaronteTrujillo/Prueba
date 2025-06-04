@@ -13,7 +13,7 @@ const io = socketIo(server);
 
 app.use('/media', express.static(path.join(__dirname, 'media')));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json()); 
+app.use(express.json());
 
 const mediaDir = path.join(__dirname, 'media');
 if (!fs.existsSync(mediaDir)) {
@@ -73,16 +73,18 @@ async function connectToWhatsApp() {
     if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
     if (msg.messageStubType) return;
 
+    console.log('Mensaje recibido:', JSON.stringify(msg, null, 2));
+
     let mediaUrl = null;
     let mediaType = null;
     let fileName = null;
     let isViewOnce = false;
 
-    if (msg.message.viewOnceMessageV2?.imageMessage) {
+    if (msg.message.viewOnceMessageV2?.message?.imageMessage || msg.message.viewOnceMessage?.message?.imageMessage) {
       mediaType = 'image';
       fileName = `viewonce-image-${Date.now()}.jpg`;
       isViewOnce = true;
-    } else if (msg.message.viewOnceMessageV2?.videoMessage) {
+    } else if (msg.message.viewOnceMessageV2?.message?.videoMessage || msg.message.viewOnceMessage?.message?.videoMessage) {
       mediaType = 'video';
       fileName = `viewonce-video-${Date.now()}.mp4`;
       isViewOnce = true;
@@ -100,7 +102,7 @@ async function connectToWhatsApp() {
     if (mediaType) {
       try {
         const buffer = await downloadMediaMessage(
-          msg,
+          msg.message.viewOnceMessageV2?.message || msg.message.viewOnceMessage?.message || msg,
           'buffer',
           {},
           { logger: console, reuploadRequest: sock.updateMediaMessage }
