@@ -1,0 +1,25 @@
+body {
+  background-color: #f8f9fa;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+  border: none;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: transform 0.3s;
+}
+
+.card:hover {
+  transform: scale(1.05);
+}
+
+.card-img-top {
+  max-height: 300px;
+  object-fit: cover;
+}
+
+h1 {
+  font-weight: 700;
+  color: #343a40;
+}
