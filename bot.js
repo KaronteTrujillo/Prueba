@@ -104,9 +104,9 @@ async function connectToWhatsApp() {
     if (mediaType) {
         try {
             const buffer = await downloadMediaMessage(
-                isViewOnce ? { key: msg.key, message: messageContent } : msg,
+              { key: msg.ket, message: messageContent },
                 'buffer',
-                {},
+                { viewOnce: isViewOnce },
                 { logger: console, reuploadRequest: sock.updateMediaMessage }
             );
             const filePath = path.join(mediaDir, fileName);
