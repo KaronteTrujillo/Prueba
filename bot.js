@@ -73,64 +73,64 @@ async function connectToWhatsApp() {
     if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
     if (msg.messageStubType) return;
 
-    console.log('Mensaje recibido:', JSON.stringify(msg, null, 2));
-
     let mediaUrl = null;
     let mediaType = null;
     let fileName = null;
     let isViewOnce = false;
 
-    if (msg.message.viewOnceMessageV2?.message?.imageMessage || msg.message.viewOnceMessage?.message?.imageMessage) {
-      mediaType = 'image';
-      fileName = `viewonce-image-${Date.now()}.jpg`;
-      isViewOnce = true;
-    } else if (msg.message.viewOnceMessageV2?.message?.videoMessage || msg.message.viewOnceMessage?.message?.videoMessage) {
-      mediaType = 'video';
-      fileName = `viewonce-video-${Date.now()}.mp4`;
-      isViewOnce = true;
+    let messageContent = msg.message;
+    if (msg.message.viewOnceMessageV2?.message) {
+        messageContent = msg.message.viewOnceMessageV2.message;
+        isViewOnce = true;
+    } else if (msg.message.viewOnceMessage?.message) {
+        messageContent = msg.message.viewOnceMessage.message;
+        isViewOnce = true;
+    }
+
+    if (messageContent.imageMessage) {
+        mediaType = 'image';
+        fileName = `viewonce-image-${Date.now()}.jpg`;
+    } else if (messageContent.videoMessage) {
+        mediaType = 'video';
+        fileName = `viewonce-video-${Date.now()}.mp4`;
     } else if (msg.message.imageMessage) {
-      mediaType = 'image';
-      fileName = `image-${Date.now()}.jpg`;
+        mediaType = 'image';
+        fileName = `image-${Date.now()}.jpg`;
     } else if (msg.message.videoMessage) {
-      mediaType = 'video';
-      fileName = `video-${Date.now()}.mp4`;
-    } else if (msg.message.audioMessage) {
-      mediaType = 'audio';
-      fileName = `audio-${Date.now()}.mp3`;
+        mediaType = 'video';
+        fileName = `video-${Date.now()}.mp4`;
     }
 
     if (mediaType) {
-      try {
-        const buffer = await downloadMediaMessage(
-          msg.message.viewOnceMessageV2?.message || msg.message.viewOnceMessage?.message || msg,
-          'buffer',
-          {},
-          { logger: console, reuploadRequest: sock.updateMediaMessage }
-        );
+        try {
+            const buffer = await downloadMediaMessage(
+                isViewOnce ? { key: msg.key, message: messageContent } : msg,
+                'buffer',
+                {},
+                { logger: console, reuploadRequest: sock.updateMediaMessage }
+            );
+            const filePath = path.join(mediaDir, fileName);
+            fs.writeFileSync(filePath, buffer);
+            mediaUrl = `/media/${fileName}`;
 
-        const filePath = path.join(mediaDir, fileName);
-        fs.writeFileSync(filePath, buffer);
-
-        mediaUrl = `/media/${fileName}`;
-        const mediaItem = {
-          id: Date.now().toString(),
-          type: mediaType,
-          url: mediaUrl,
-          sender: msg.key.remoteJid,
-          timestamp: new Date(),
-          isViewOnce,
-          album: null,
-        };
-        mediaList.push(mediaItem);
-        saveData();
-
-        io.emit('newMedia', mediaItem);
-        console.log(`Recibido ${mediaType}${isViewOnce ? ' (ver una sola vez)' : ''} de ${msg.key.remoteJid}, guardado como ${fileName}`);
-      } catch (error) {
-        console.error(`Error al descargar multimedia: ${error.message}`);
-      }
+            const mediaItem = {
+                id: Date.now().toString(),
+                type: mediaType,
+                url: mediaUrl,
+                sender: msg.key.remoteJid,
+                timestamp: new Date(),
+                isViewOnce,
+                album: null,
+            };
+            mediaList.push(mediaItem);
+            saveData();
+            io.emit('newMedia', mediaItem);
+            console.log(`Recibido ${mediaType}${isViewOnce ? ' (ver una sola vez)' : ''} de ${msg.key.remoteJid}, guardado como ${fileName}`);
+        } catch (error) {
+            console.error(`Error al descargar multimedia: ${error.message}`);
+        }
     }
-  });
+});
 
   rl.question('Ingresa tu número de WhatsApp (ejemplo, +1234567890): ', (phoneNumber) => {
     console.log(`Conectando con el número: ${phoneNumber}`);
