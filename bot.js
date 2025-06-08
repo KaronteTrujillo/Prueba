@@ -76,37 +76,26 @@ async function connectToWhatsApp() {
     let mediaUrl = null;
     let mediaType = null;
     let fileName = null;
-    let isViewOnce = false;
 
-    let messageContent = msg.message;
-    if (msg.message.viewOnceMessageV2?.message) {
-        messageContent = msg.message.viewOnceMessageV2.message;
-        isViewOnce = true;
-    } else if (msg.message.viewOnceMessage?.message) {
-        messageContent = msg.message.viewOnceMessage.message;
-        isViewOnce = true;
-    }
+    const messageContent = msg.message;
 
     if (messageContent.imageMessage) {
         mediaType = 'image';
-        fileName = `viewonce-image-${Date.now()}.jpg`;
+        fileName = `image-${Date.now()}.jpg`;
     } else if (messageContent.videoMessage) {
         mediaType = 'video';
-        fileName = `viewonce-video-${Date.now()}.mp4`;
-    } else if (msg.message.imageMessage) {
-        mediaType = 'image';
-        fileName = `image-${Date.now()}.jpg`;
-    } else if (msg.message.videoMessage) {
-        mediaType = 'video';
         fileName = `video-${Date.now()}.mp4`;
+    } else if (messageContent.audioMessage) {
+        mediaType = 'audio';
+        fileName = `audio-${Date.now()}.mp3`;
     }
 
     if (mediaType) {
         try {
             const buffer = await downloadMediaMessage(
-              { key: msg.ket, message: messageContent },
+                msg,
                 'buffer',
-                { viewOnce: isViewOnce },
+                {},
                 { logger: console, reuploadRequest: sock.updateMediaMessage }
             );
             const filePath = path.join(mediaDir, fileName);
@@ -119,13 +108,13 @@ async function connectToWhatsApp() {
                 url: mediaUrl,
                 sender: msg.key.remoteJid,
                 timestamp: new Date(),
-                isViewOnce,
+                isViewOnce: false, // Ya no distinguimos "ver una vez"
                 album: null,
             };
             mediaList.push(mediaItem);
             saveData();
             io.emit('newMedia', mediaItem);
-            console.log(`Recibido ${mediaType}${isViewOnce ? ' (ver una sola vez)' : ''} de ${msg.key.remoteJid}, guardado como ${fileName}`);
+            console.log(`Recibido ${mediaType} de ${msg.key.remoteJid}, guardado como ${fileName}`);
         } catch (error) {
             console.error(`Error al descargar multimedia: ${error.message}`);
         }
