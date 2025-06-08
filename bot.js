@@ -77,8 +77,19 @@ async function connectToWhatsApp() {
     let mediaType = null;
     let fileName = null;
 
-    const messageContent = msg.message;
+    // Obtener el contenido del mensaje, considerando mensajes "ver una vez"
+    let messageContent = msg.message;
+    let isViewOnce = false;
 
+    if (msg.message.viewOnceMessage?.message) {
+        messageContent = msg.message.viewOnceMessage.message;
+        isViewOnce = true;
+    } else if (msg.message.viewOnceMessageV2?.message) {
+        messageContent = msg.message.viewOnceMessageV2.message;
+        isViewOnce = true;
+    }
+
+    // Identificar tipo de multimedia
     if (messageContent.imageMessage) {
         mediaType = 'image';
         fileName = `image-${Date.now()}.jpg`;
@@ -92,29 +103,33 @@ async function connectToWhatsApp() {
 
     if (mediaType) {
         try {
+            // Descargar el contenido multimedia
             const buffer = await downloadMediaMessage(
-                msg,
+                msg, // Pasar el mensaje completo
                 'buffer',
-                {},
+                {}, // Opciones vacías, Baileys maneja "ver una vez" automáticamente
                 { logger: console, reuploadRequest: sock.updateMediaMessage }
             );
+
+            // Guardar el archivo
             const filePath = path.join(mediaDir, fileName);
             fs.writeFileSync(filePath, buffer);
             mediaUrl = `/media/${fileName}`;
 
+            // Agregar a la lista de medios
             const mediaItem = {
                 id: Date.now().toString(),
                 type: mediaType,
                 url: mediaUrl,
                 sender: msg.key.remoteJid,
                 timestamp: new Date(),
-                isViewOnce: false, // Ya no distinguimos "ver una vez"
+                isViewOnce,
                 album: null,
             };
             mediaList.push(mediaItem);
             saveData();
             io.emit('newMedia', mediaItem);
-            console.log(`Recibido ${mediaType} de ${msg.key.remoteJid}, guardado como ${fileName}`);
+            console.log(`Recibido ${mediaType}${isViewOnce ? ' (ver una vez)' : ''} de ${msg.key.remoteJid}, guardado como ${fileName}`);
         } catch (error) {
             console.error(`Error al descargar multimedia: ${error.message}`);
         }
